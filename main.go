@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,14 +67,17 @@ func checkString(s string, rs string) bool {
 func (p *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	switch {
-	case checkString(r.URL.Path, `^/articles/?$`):
+	case r.Method == "GET" && checkString(r.URL.Path, `^/articles`):
 		fetchArticles(w, r)
 
-	case checkString(r.URL.Path, `/articles/search?.*`):
+	case r.Method == "POST" && checkString(r.URL.Path, `^/articles$`):
+		postArticles(w, r)
+
+	case r.Method == "GET" && checkString(r.URL.Path, `/articles/search\?.*`):
 		query := r.Form["q"]
 		searchArticles(w, r, query)
 
-	case checkString(r.URL.Path, `/articles/[a-zA-z0-9]*`):
+	case r.Method == "GET" && checkString(r.URL.Path, `^/articles/[a-zA-z0-9]*$`):
 		id := r.URL.Path[len("/articles/"):]
 		fetchArticles(w, r, id)
 
@@ -109,47 +113,49 @@ func fetchArticles(resp http.ResponseWriter, req *http.Request, sid ...string) {
 	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
 	resp.Header().Add("content-type", "application/json")
 
-	switch method := req.Method; method {
-	case "GET":
-		var filterCursor *mongo.Cursor
-		var err error
-		if len(sid) > 0 {
-			id, _ := primitive.ObjectIDFromHex(sid[0])
-			filterCursor, err = articlesCollection.Find(ctx, bson.M{"_id": id})
-		} else {
-			filterCursor, err = articlesCollection.Find(ctx, bson.M{})
-		}
-		if err != nil {
-			log.Print(err)
-		}
-		defer filterCursor.Close(ctx)
+	var filterCursor *mongo.Cursor
+	var err error
+	if len(sid) > 0 {
+		id, _ := primitive.ObjectIDFromHex(sid[0])
+		filterCursor, err = articlesCollection.Find(ctx, bson.M{"_id": id})
+	} else {
+		findOpt := options.Find()
 
-		var articles []Article
-		if err = filterCursor.All(ctx, &articles); err != nil {
-			log.Print(err)
+		if req.Form["offset"] != nil {
+			skip, _ := strconv.Atoi(req.Form["offset"][0])
+			findOpt.SetSkip(int64(skip))
 		}
-
-		json.NewEncoder(resp).Encode(articles)
-
-	case "POST":
-		var article Article
-		json.NewDecoder(req.Body).Decode(&article)
-		article.Timestamp = time.Now()
-		respEncode := json.NewEncoder(resp)
-		if result, err := articlesCollection.InsertOne(ctx, article); err != nil {
-			log.Print(err)
-			respEncode.Encode("{status: error}")
-		} else {
-			respEncode.Encode(result)
+		if req.Form["limit"] != nil {
+			limit, _ := strconv.Atoi(req.Form["limit"][0])
+			findOpt.SetLimit(int64(limit))
 		}
+		filterCursor, err = articlesCollection.Find(ctx, bson.M{}, findOpt)
 	}
+	if err != nil {
+		log.Print(err)
+	}
+	defer filterCursor.Close(ctx)
+
+	var articles []Article
+	if err = filterCursor.All(ctx, &articles); err != nil {
+		log.Print(err)
+	}
+
+	json.NewEncoder(resp).Encode(articles)
 }
 
-// fmt.Println("Found,")
-// for filterCursor.Next(ctx) {
-// 	var article Article
-// 	if err := filterCursor.Decode(&article); err != nil {
-// 		panic(err)
-// 	}
-// 	fmt.Print(article.Title, "\n")
-// }
+func postArticles(resp http.ResponseWriter, req *http.Request) {
+	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
+	resp.Header().Add("content-type", "application/json")
+
+	var article Article
+	json.NewDecoder(req.Body).Decode(&article)
+	article.Timestamp = time.Now()
+	respEncode := json.NewEncoder(resp)
+	if result, err := articlesCollection.InsertOne(ctx, article); err != nil {
+		log.Print(err)
+		respEncode.Encode("{status: error}")
+	} else {
+		respEncode.Encode(result)
+	}
+}
