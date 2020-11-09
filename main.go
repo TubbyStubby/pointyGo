@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -26,6 +27,7 @@ type Article struct {
 	Timestamp time.Time          `bson:"timestamp,omitempty"`
 }
 
+var lock sync.Mutex
 var client *mongo.Client
 var articlesCollection *mongo.Collection
 var err error
@@ -145,6 +147,9 @@ func fetchArticles(resp http.ResponseWriter, req *http.Request, sid ...string) {
 }
 
 func postArticles(resp http.ResponseWriter, req *http.Request) {
+	lock.Lock()
+	defer lock.Unlock()
+
 	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
 	resp.Header().Add("content-type", "application/json")
 
