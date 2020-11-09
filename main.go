@@ -47,19 +47,28 @@ func (p *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch path := r.URL.Path; path {
 	case "/articles":
 		fetchArticles(w, r)
+	case "/articles/":
+		id := path[len("/articles/"):]
+		fetchArticles(w, r, id)
 	default:
 		http.NotFound(w, r)
 	}
 	return
 }
 
-func fetchArticles(resp http.ResponseWriter, req *http.Request) {
+func fetchArticles(resp http.ResponseWriter, req *http.Request, id ...string) {
 	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
 	resp.Header().Add("content-type", "application/json")
 
 	switch method := req.Method; method {
 	case "GET":
-		filterCursor, err := articlesCollection.Find(ctx, bson.M{})
+		var filterCursor *mongo.Cursor
+		var err error
+		if len(id) > 0 {
+			filterCursor, err = articlesCollection.Find(ctx, bson.M{"_id": id})
+		} else {
+			filterCursor, err = articlesCollection.Find(ctx, bson.M{})
+		}
 		if err != nil {
 			log.Print(err)
 		}
