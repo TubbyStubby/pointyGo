@@ -19,19 +19,18 @@ type Article struct {
 	Title     string             `bson:"title,omitempty"`
 	Subtitle  string             `bson:"subtitle,omitempty"`
 	Content   string             `bson:"content,omitempty"`
-	Timestamp primitive.DateTime `bson:"timestamp,omitempty"`
+	Timestamp time.Time          `bson:"timestamp,omitempty"`
 }
 
 var client *mongo.Client
 var articlesCollection *mongo.Collection
-var ctx context.Context
 var err error
 
 type Router struct {
 }
 
 func main() {
-	ctx, _ = context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
 	client, err = mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("TEST_ATLAS_URI")))
 	if err != nil {
 		log.Fatal(err)
@@ -55,22 +54,36 @@ func (p *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func fetchArticles(resp http.ResponseWriter, req *http.Request) {
-	ctx, _ = context.WithTimeout(context.Background(), 20*time.Second)
-
+	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
 	resp.Header().Add("content-type", "application/json")
 
-	filterCursor, err := articlesCollection.Find(ctx, bson.M{})
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer filterCursor.Close(ctx)
+	switch method := req.Method; method {
+	case "GET":
+		filterCursor, err := articlesCollection.Find(ctx, bson.M{})
+		if err != nil {
+			log.Print(err)
+		}
+		defer filterCursor.Close(ctx)
 
-	var articles []Article
-	if err = filterCursor.All(ctx, &articles); err != nil {
-		log.Fatal(err)
-	}
+		var articles []Article
+		if err = filterCursor.All(ctx, &articles); err != nil {
+			log.Print(err)
+		}
 
-	json.NewEncoder(resp).Encode(articles)
+		json.NewEncoder(resp).Encode(articles)
+
+	case "POST":
+		var article Article
+		json.NewDecoder(req.Body).Decode(&article)
+		article.Timestamp = time.Now()
+		respEncode := json.NewEncoder(resp)
+		if result, err := articlesCollection.InsertOne(ctx, article); err != nil {
+			log.Print(err)
+			respEncode.Encode("{status: error}")
+		} else {
+			respEncode.Encode(result)
+		}
+	}
 }
 
 // fmt.Println("Found,")
