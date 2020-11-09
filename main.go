@@ -44,7 +44,7 @@ func main() {
 	}
 	defer client.Disconnect(ctx)
 
-	articlesCollection = client.Database("pointyGo").Collection("articles")
+	articlesCollection = client.Database("pointyGo").Collection("stackArticles")
 
 	index = mongo.IndexModel{
 		Options: options.Index().SetBackground(true),
@@ -59,7 +59,7 @@ func main() {
 	}
 
 	mux := &Router{}
-	http.ListenAndServe(":9090", mux)
+	http.ListenAndServe(os.Getenv("GO_PORT"), mux)
 }
 
 func checkString(s string, rs string) bool {
@@ -69,13 +69,13 @@ func checkString(s string, rs string) bool {
 func (p *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	switch {
-	case r.Method == "GET" && checkString(r.URL.Path, `^/articles`):
+	case r.Method == "GET" && (checkString(r.URL.Path, `^/articles$`) || checkString(r.URL.Path, `^/articles\?.*`)):
 		fetchArticles(w, r)
 
 	case r.Method == "POST" && checkString(r.URL.Path, `^/articles$`):
 		postArticles(w, r)
 
-	case r.Method == "GET" && checkString(r.URL.Path, `/articles/search\?.*`):
+	case r.Method == "GET" && checkString(r.URL.Path, `/articles/search?.*`):
 		query := r.Form["q"]
 		searchArticles(w, r, query)
 
