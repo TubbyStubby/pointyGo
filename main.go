@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -15,7 +16,7 @@ import (
 )
 
 func main() {
-	resp, err := http.Get("https://api.stackexchange.com/2.2/questions?pagesize=100&order=desc&sort=activity&tagged=go&site=stackoverflow")
+	resp, err := http.Get("https://api.stackexchange.com/2.2/questions?pagesize=100&order=desc&sort=activity&tagged=go&site=stackoverflow&filter=withbody")
 	if err != nil {
 		panic(err)
 	}
@@ -38,13 +39,18 @@ func main() {
 	}
 
 	pGodb := client.Database("pointyGo")
-	someClcn := pGodb.Collection("articles")
+	someClcn := pGodb.Collection("stackArticles")
 
 	for i, v := range list {
+		user := v["owner"].(map[string]interface{})
+
+		body := v["body"].(string)
+		para := body[3:strings.Index(body, "</p>")]
+
 		doc := bson.D{
 			{"title", v["title"]},
-			{"subtitle", fmt.Sprintf("Views: %.0f", v["view_count"])},
-			{"content", fmt.Sprintf("Lorem ipsum content here.  %d", i)},
+			{"subtitle", fmt.Sprintf("User: %v", user["display_name"])},
+			{"content", fmt.Sprintf("{%d} %s\nlink: %v", i, para, v["link"])},
 			{"timestamp", time.Now()},
 		}
 
