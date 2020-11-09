@@ -14,4 +14,3 @@ GET /articles/<id>                      - fetch a particular article
 
 GET /articles/search?q=<query terms>    - searches terms in title, subtitle, content
 ```
-

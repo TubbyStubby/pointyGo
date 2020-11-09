@@ -38,7 +38,7 @@ type Router struct {
 
 func main() {
 	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
-	client, err = mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("TEST_ATLAS_URI")))
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("mongodb+srv://forster:abcd@cluster0.g9sl4.mongodb.net/pointyGo?retryWrites=true&w=majority")))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func main() {
 	}
 
 	mux := &Router{}
-	http.ListenAndServe(os.Getenv("GO_PORT"), mux)
+	http.ListenAndServe(":9090", mux)
 }
 
 func checkString(s string, rs string) bool {
